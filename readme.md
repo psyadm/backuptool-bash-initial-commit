@@ -1,4 +1,4 @@
-# Backuptool for Webdir's and MySql-Datebases
+# Backuptool for Webdir's and MySql-Databases
 
 you can backup some webdirectory's and some mysql-databases. 
 
