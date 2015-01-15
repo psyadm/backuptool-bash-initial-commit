@@ -91,6 +91,7 @@ fi
 # Start Files backup #
 ######################
 
+#count datadir's from config
 countdir=${#datadir[*]};
 
 for (( j=0; j<$countdir; j++ ))
@@ -118,6 +119,10 @@ done
 # Start MYSQL Backup #
 ######################
 
+#clear mysql checkfile
+echo "" > /tmp/mysqlcheck
+
+#count databaeses from config
 count=${#datenbank[*]};
 
 for (( i=0; i<$count; i++ ))
@@ -128,7 +133,6 @@ do
 	db=${datenbank[$i]}
 	echo " ";
 	# Check MYSQL DB
-		echo "" > /tmp/mysqlcheck
 		echo -n "Check Mysql Database: \"$db\" ... " >> $mailtext
 		mysqlcheck -s -u$dbuser -p$dbpass $db >> /tmp/mysqlcheck
 
