@@ -158,7 +158,7 @@ do
 		if [ $? == "0" ]
 		then
 			echo -n " done " >> $mailtext
-			sqlfile=$backupdir/$db'_'$date1.sql
+			sqlfile=$backupdir/mysql/$db'_'$date1.sql
 			echo " " >> $mailtext
 		else
 			echo -n " Error " >> $mailtext
