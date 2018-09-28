@@ -1,6 +1,9 @@
 
 ![Packagist](https://img.shields.io/packagist/l/doctrine/orm.svg)
 
+[![GitHub issues](https://img.shields.io/github/issues/badges/shields.svg)](https://github.com/psyadm/backuptool-bash/issues)
+
+
 
 # Backuptool for Webdir's and MySql-Databases
 
