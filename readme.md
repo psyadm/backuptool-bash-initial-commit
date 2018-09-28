@@ -1,5 +1,5 @@
 
-[![GitHub license](https://img.shields.io/github/license/psyadm/backuptool-bash.svg)](https://github.com/psyadm/backuptool-bash) [![GitHub issues](https://img.shields.io/github/issues/psyadm/backuptool-bash.svg)](https://github.com/psyadm/backuptool-bash/issues) ![GitHub top language](https://img.shields.io/github/languages/top/badges/shields.svg)
+[![GitHub license](https://img.shields.io/github/license/psyadm/backuptool-bash.svg)](https://github.com/psyadm/backuptool-bash) [![GitHub issues](https://img.shields.io/github/issues/psyadm/backuptool-bash.svg)](https://github.com/psyadm/backuptool-bash/issues) ![GitHub top language](https://img.shields.io/github/languages/top/psyadm/backuptool-bash.svg)
 
 
 
