@@ -1,5 +1,5 @@
 
-![Packagist](https://img.shields.io/packagist/l/doctrine/orm.svg)  [![GitHub license](https://img.shields.io/github/license/psyadm/backuptool-bash.svg)](https://github.com/psyadm/backuptool-bash) [![GitHub issues](https://img.shields.io/github/issues/psyadm/backuptool-bash.svg)](https://github.com/psyadm/backuptool-bash/issues)
+[![GitHub license](https://img.shields.io/github/license/psyadm/backuptool-bash.svg)](https://github.com/psyadm/backuptool-bash) [![GitHub issues](https://img.shields.io/github/issues/psyadm/backuptool-bash.svg)](https://github.com/psyadm/backuptool-bash/issues)
 
 
 
