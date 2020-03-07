@@ -81,12 +81,7 @@ do
 	echo " ";
 	# Dump PostgreSQL DB
 		echo -n "create dump for db: \"$db\" ... " >> $mailtext
-		if [ $db == "project2_core" ]
-		then
-			pg_dump --exclude-table=co2_flight -Fc $db > $backupdir/postgresql/$db'_'$date1.sql
-		else
 			pg_dump -Fc $db > $backupdir/postgresql/$db'_'$date1.sql
-		fi
 		if [ $? == "0" ]
 		then
 			echo -n " done " >> $mailtext
