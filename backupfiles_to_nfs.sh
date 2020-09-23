@@ -21,6 +21,7 @@ nfsmountdir=/path/to/backup/					# Ordner fuer NFS-Share
 
 ################# CONFIG END #################
 
+
 #Clear mailtext
 
 echo " " > $mailtext;
@@ -50,7 +51,16 @@ else
 fi
 
 #mount NFS to backupdir
+echo -n "mount nfs share $nfsmount ... " >> $mailtext;
 mount $nfsmount $nfsmountdir
+if [ $? == "0" ]
+then
+	echo -n " done" >> $mailtext
+	echo "\n" >> $mailtext
+else
+	echo -n " error" >> $mailtext
+	echo "\n" >> $mailtext
+fi
 
 # Check Backupdir
 if test -d $backupdir
