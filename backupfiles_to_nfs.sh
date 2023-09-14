@@ -1,26 +1,31 @@
 #!/bin/bash
 #
-# Backup Tool 0.1
+# BackupNFS Tool 0.2
 #
-# Programm von Netstack GbR written by Andreas Pfeiffer
+# Programm von Netstack GmbH written by Andreas Pfeiffer
 #
 # Dieses Programm führt Datei Backups zu einem NFS Share durch
 #
 ################# CONFIG #####################
 
-backupdir=/path/to/backup/HOSTNAME		 			# Verzeichniss wo die Backups abgelegt werden, es werden automatisch unterordner "mysql" und "files" erstellt.
-datadir=(/path/to/files /path/to/files/2 )	# Welche Ordner sollen gesichert werden
-date1=$(date +%d_%m_%Y)						# Datumsformat welches an die Dateien angehangen wird
-hostname=$(hostname -f)						# Hostname
+backupdir="$nfsmountdir/$hostname"		 		# Verzeichniss wo die Backups abgelegt werden, es werden automatisch unterordner "mysql" und "files" erstellt.
+datadir=(/path/to/files /path/to/files/2 )		# Welche Ordner sollen gesichert werden
+datenbank=(dbname dbnam2)						# Datenbanken welche gesichert werden sollen
+date1=$(date +%a)								# Datumsformat welches an die Dateien angehangen wird
+hostname=$(hostname -f)							# Hostname
+dbuser=DBUSER									# Datenbank User
+dbpass=DBPASS									# Datenbank Passwort
 mailsubject="Backup - $hostname"				# Mail Betreff
-mailtext=/tmp/mailtext.txt 					# Mailtext zum Versand
-email=monitor@example.com 					# Empfaenger der Status Mails
+mailtext=/tmp/mailtext.txt 						# Mailtext zum Versand
+email=monitor@example.com 						# Empfaenger der Status Mails
 date2=$(date +%A" "%d.%m.%Y)					# Datum für E-Mail
 nfsmount="192.168.0.1:/backupshare"				# NFS server + mount mount
 nfsmountdir=/path/to/backup/					# Ordner fuer NFS-Share
 
 ################# CONFIG END #################
 
+#reset Error Variable
+error="0";
 
 #Clear mailtext
 
@@ -45,6 +50,8 @@ else
                 echo "\n" >> $mailtext
         else
                 echo -n "Error - Cant create nfs directory" >> $mailtext
+				# send mail on Error 
+				cat $mailtext | mail -s "$mailsubject" $email
                 exit 1;
         fi
 
@@ -60,6 +67,9 @@ then
 else
 	echo -n " error" >> $mailtext
 	echo "\n" >> $mailtext
+	# send mail on Error 
+	cat $mailtext | mail -s "$mailsubject" $email
+	exit 1;
 fi
 
 # Check Backupdir
@@ -75,12 +85,32 @@ else
 		echo "\n" >> $mailtext
 	else
 		echo -n "Error - Cant create backupdirectory" >> $mailtext
+		# send mail on Error 
+		cat $mailtext | mail -s "$mailsubject" $email
 		exit 1;
 	fi
 
 fi
 
+# Check Backupdir for mysql
+if test -d $backupdir/mysql
+then
+        echo "";
+else
+        echo -n "Create Backupdirectory for mysql ... " >> $mailtext
+        mkdir $backupdir/mysql
+	if test -d $backupdir/mysql
+	then
+        	echo -n "done" >> $mailtext
+		echo "\n" >> $mailtext
+	else
+		echo -n "Error - Cant create backupdirectory for mysql" >> $mailtext
+		# send mail on Error 
+		cat $mailtext | mail -s "$mailsubject" $email
+		exit 1;
+	fi
 
+fi
 
 # Check Backupdir for files
 if test -d $backupdir/files
@@ -91,10 +121,12 @@ else
         mkdir -p $backupdir/files
 	if test -d $backupdir/files
 	then
-        	echo -n "done" >> $mailtext
+		echo -n "done" >> $mailtext
 		echo "\n" >> $mailtext
 	else
 		echo -n "Error - Cant create backupdirectory for files" >> $mailtext
+		# send mail on Error 
+		cat $mailtext | mail -s "$mailsubject" $email
 		exit 1;
 	fi
 
@@ -109,8 +141,6 @@ countdir=${#datadir[*]};
 
 for (( j=0; j<$countdir; j++ ))
 do
-	#reset Error Variable TODO Error handling
-	error="0";
 	filesdir=${datadir[$j]}
 	#echo "";
 	#make backup from files dir
@@ -124,6 +154,9 @@ do
 	else
 		echo -n " error" >> $mailtext
 		echo "\n" >> $mailtext
+		# send mail on Error 
+		cat $mailtext | mail -s "$mailsubject" $email
+		exit 1;
 	fi
 done
 
@@ -132,6 +165,6 @@ umount $nfsmountdir
 
 # Mailversand
 
-cat $mailtext | mail -s "$mailsubject" $email
+# cat $mailtext | mail -s "$mailsubject" $email
 
 exit 0;
