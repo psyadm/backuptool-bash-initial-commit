@@ -189,5 +189,12 @@ check_ssmtp_packages() {
     fi
 }
 
-echo -e "Subject: $mailsubject\n\n$mailtext" | msmtp -t email
+(
+  echo "To: $email"
+  echo "Subject: $mailsubject"
+  echo "Content-Type: text/plain"
+  echo
+  cat $mailtext
+) | msmtp $email
+
 exit 0
