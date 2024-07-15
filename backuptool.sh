@@ -177,6 +177,17 @@ for (( i=0; i<$count; i++ )); do
 done
 
 # Mailversand
-cat $mailtext | mail -s "$mailsubject" $email
+check_ssmtp_packages() {
+    if ! dpkg -l | grep -q msmtp; then
+        echo "msmtp packages not installed. Installing..."
+        sudo apt-get update
+        sudo apt-get install -y msmtp
+        if [ $? -ne 0 ]; then
+            echo "Failed to install msmtp packages. Exiting..."
+            exit 1
+        fi
+    fi
+}
 
+echo -e "Subject: $mailsubject\n\n$mailtext" | msmtp -t email
 exit 0
