@@ -2,7 +2,7 @@
 #
 # Backup Tool 2.0
 #
-# Programm von Netstack GbR written by Andreas Pfeiffer
+# Programm von Netstack GmbH written by Andreas Pfeiffer
 #
 # Dieses Programm wurde für Datenbank backups mehrerer Datenbanken vorgesehen!
 # Ab Version 1.2 gibt es auch MYSQL-Checks
