@@ -1,170 +1,138 @@
 #!/bin/bash
-#
-# BackupNFS Tool 0.2
-#
-# Programm von Netstack GmbH written by Andreas Pfeiffer
-#
-# Dieses Programm führt Datei Backups zu einem NFS Share durch
-#
+# BackupNFS Tool 0.3 - NFS-Sicherung
+# Programm von Netstack GmbH
+
 ################# CONFIG #####################
+nfsmount="192.168.0.1:/backupshare"
+nfsmountdir="/data/nfs_backup"
+hostname="$(hostname -f)"
+backupdir="$nfsmountdir/$hostname"
+datadir=(/path/to/files /path/to/files/2)
+datenbank=(dbname dbname2)
+date1="$(date +%a)"
+date2="$(date +%A %d.%m.%Y)"
+dbuser="DBUSER"
+dbpass="DBPASS"
+email="monitor@example.com"
+mailsubject="Backup - $hostname"
+mailtext="/tmp/mailtext.txt"
 
-backupdir="$nfsmountdir/$hostname"		 		# Verzeichniss wo die Backups abgelegt werden, es werden automatisch unterordner "mysql" und "files" erstellt.
-datadir=(/path/to/files /path/to/files/2 )		# Welche Ordner sollen gesichert werden
-datenbank=(dbname dbnam2)						# Datenbanken welche gesichert werden sollen
-date1=$(date +%a)								# Datumsformat welches an die Dateien angehangen wird
-hostname=$(hostname -f)							# Hostname
-dbuser=DBUSER									# Datenbank User
-dbpass=DBPASS									# Datenbank Passwort
-mailsubject="Backup - $hostname"				# Mail Betreff
-mailtext=/tmp/mailtext.txt 						# Mailtext zum Versand
-email=monitor@example.com 						# Empfaenger der Status Mails
-date2=$(date +%A" "%d.%m.%Y)					# Datum für E-Mail
-nfsmount="192.168.0.1:/backupshare"				# NFS server + mount mount
-nfsmountdir=/path/to/backup/					# Ordner fuer NFS-Share
+################# FUNCTIONS #####################
 
-################# CONFIG END #################
+log_message() {
+    echo -e "$1" | tee -a "$mailtext"
+}
 
-#reset Error Variable
-error="0";
+send_mail() {
+    (
+        echo "To: $email"
+        echo "Subject: $mailsubject"
+        echo "Content-Type: text/plain"
+        echo
+        cat $mailtext
+    ) | msmtp $email
+}
 
-#Clear mailtext
-
-echo " " > $mailtext;
-
-#Aktuelles Datum
-echo "#############################################################" >> $mailtext
-echo "Backup Script from $hostname - "$date2 >> $mailtext
-echo "#############################################################" >> $mailtext
-echo "" >> $mailtext
-
-# Check Backupdir
-if test -d $nfsmountdir
-then
-        echo "";
-else
-        echo -n "Create Backupdirectory ... " >> $mailtext
-        mkdir -p $nfsmountdir
-        if test -d $nfsmountdir
-        then
-                echo -n "done" >> $mailtext
-                echo "\n" >> $mailtext
-        else
-                echo -n "Error - Cant create nfs directory" >> $mailtext
-				# send mail on Error 
-				cat $mailtext | mail -s "$mailsubject" $email
-                exit 1;
+check_and_install_package() {
+    local pkg="$1"
+    if ! dpkg -l | grep -q "$pkg"; then
+        log_message "Installing $pkg..."
+        sudo apt-get update && sudo apt-get install -y "$pkg"
+        if [ $? -ne 0 ]; then
+            log_message "Failed to install $pkg. Exiting..."
+            send_mail
+            exit 1
         fi
+    fi
+}
 
-fi
+create_directory() {
+    local dir="$1"
+    if [ ! -d "$dir" ]; then
+        mkdir -p "$dir"
+        if [ $? -ne 0 ]; then
+            log_message "Error creating directory: $dir"
+            send_mail
+            exit 1
+        fi
+    fi
+}
 
-#mount NFS to backupdir
-echo -n "mount nfs share $nfsmount ... " >> $mailtext;
-mount $nfsmount $nfsmountdir
-if [ $? == "0" ]
-then
-	echo -n " done" >> $mailtext
-	echo "\n" >> $mailtext
-else
-	echo -n " error" >> $mailtext
-	echo "\n" >> $mailtext
-	# send mail on Error 
-	cat $mailtext | mail -s "$mailsubject" $email
-	exit 1;
-fi
+mount_nfs() {
+    mount | grep -q "$nfsmountdir"
+    if [ $? -ne 0 ]; then
+        log_message "Mounting NFS share $nfsmount to $nfsmountdir..."
+        mount "$nfsmount" "$nfsmountdir"
+        if [ $? -ne 0 ]; then
+            log_message "Error mounting NFS share. Exiting..."
+            send_mail
+            exit 1
+        fi
+    fi
+}
 
-# Check Backupdir
-if test -d $backupdir
-then
-        echo "";
-else
-        echo -n "Create Backupdirectory ... " >> $mailtext
-        mkdir -p $backupdir
-	if test -d $backupdir
-	then
-        	echo -n "done" >> $mailtext
-		echo "\n" >> $mailtext
-	else
-		echo -n "Error - Cant create backupdirectory" >> $mailtext
-		# send mail on Error 
-		cat $mailtext | mail -s "$mailsubject" $email
-		exit 1;
-	fi
+backup_files() {
+    for dir in "${datadir[@]}"; do
+        if [ -d "$dir" ]; then
+            local sanitized_dir="${dir%/}"  # Entfernt abschließenden Slash
+            local name="$(basename "$sanitized_dir")"  # Extrahiert den Ordnernamen
+            if [ -z "$name" ]; then
+                log_message "Error: Unable to extract directory name for path $dir."
+                send_mail
+                exit 1
+            fi
+            log_message "Backing up directory $dir to $backupdir/files/${name}_$date1.tar.gz..."
+            tar -Pczf "$backupdir/files/${name}_$date1.tar.gz" "$dir" --ignore-failed-read --warning=no-file-changed
+            if [ $? -ne 0 ]; then
+                log_message "Error backing up $dir. Exiting..."
+                send_mail
+                exit 1
+            fi
+        else
+            log_message "Error: Directory $dir does not exist. Skipping..."
+        fi
+    done
+}
 
-fi
 
-# Check Backupdir for mysql
-if test -d $backupdir/mysql
-then
-        echo "";
-else
-        echo -n "Create Backupdirectory for mysql ... " >> $mailtext
-        mkdir $backupdir/mysql
-	if test -d $backupdir/mysql
-	then
-        	echo -n "done" >> $mailtext
-		echo "\n" >> $mailtext
-	else
-		echo -n "Error - Cant create backupdirectory for mysql" >> $mailtext
-		# send mail on Error 
-		cat $mailtext | mail -s "$mailsubject" $email
-		exit 1;
-	fi
+backup_mysql() {
+    for db in "${datenbank[@]}"; do
+        local dump_file="$backupdir/mysql/${db}_$date1.sql"
+        log_message "Creating MySQL dump for database $db..."
+        mysqldump -u"$dbuser" -p"$dbpass" --opt "$db" > "$dump_file"
+        if [ $? -ne 0 ]; then
+            log_message "Error creating MySQL dump for $db. Exiting..."
+            send_mail
+            exit 1
+        fi
+        log_message "Compressing dump file $dump_file..."
+        gzip -f -9 "$dump_file"
+        if [ $? -ne 0 ]; then
+            log_message "Error compressing $dump_file. Exiting..."
+            send_mail
+            exit 1
+        fi
+    done
+}
 
-fi
+################# MAIN SCRIPT #####################
 
-# Check Backupdir for files
-if test -d $backupdir/files
-then
-        echo "";
-else
-        echo -n "Create Backupdirectory for files ... " >> $mailtext
-        mkdir -p $backupdir/files
-	if test -d $backupdir/files
-	then
-		echo -n "done" >> $mailtext
-		echo "\n" >> $mailtext
-	else
-		echo -n "Error - Cant create backupdirectory for files" >> $mailtext
-		# send mail on Error 
-		cat $mailtext | mail -s "$mailsubject" $email
-		exit 1;
-	fi
+>"$mailtext" # Clear mail text
+log_message "Starting backup script for $hostname on $date2"
 
-fi
+check_and_install_package "nfs-common"
+check_and_install_package "msmtp"
 
-######################
-# Start Files backup #
-######################
+create_directory "$nfsmountdir"
+mount_nfs
+create_directory "$backupdir"
+create_directory "$backupdir/mysql"
+create_directory "$backupdir/files"
 
-#count datadir's from config
-countdir=${#datadir[*]};
+backup_files
+backup_mysql
 
-for (( j=0; j<$countdir; j++ ))
-do
-	filesdir=${datadir[$j]}
-	#echo "";
-	#make backup from files dir
-	name=$(basename $filesdir)
-	echo -n "make backup from $filesdir ..." >> $mailtext
-	tar -Pczf  $backupdir/files/$name'_'$date1.tar.gz $filesdir
-	if [ $? == "0" ]
-	then
-		echo -n " done" >> $mailtext
-		echo "\n" >> $mailtext
-	else
-		echo -n " error" >> $mailtext
-		echo "\n" >> $mailtext
-		# send mail on Error 
-		cat $mailtext | mail -s "$mailsubject" $email
-		exit 1;
-	fi
-done
-
-#umount NFS share
-umount $nfsmountdir
-
-# Mailversand
-
-# cat $mailtext | mail -s "$mailsubject" $email
-
-exit 0;
+umount "$nfsmountdir"
+log_message "Backup completed successfully."
+send_mail
+exit 0

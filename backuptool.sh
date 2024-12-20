@@ -1,207 +1,118 @@
 #!/bin/bash
-#
-# Backup Tool 2.0
-#
-# Programm von Netstack GmbH written by Andreas Pfeiffer
-#
-# Dieses Programm wurde für Datenbank backups mehrerer Datenbanken vorgesehen!
-# Ab Version 1.2 gibt es auch MYSQL-Checks
-# Ab Version 2.0 sind auch Ordnerbackups moeglich
-#
+# Backup Tool 0.3 - Lokale Speicherung
+# Programm von Netstack GmbH
+
 ################# CONFIG #####################
+hostname="$(hostname -f)"
+backupdir="/local_backup/$hostname"
+datadir=(/path/to/files /path/to/files/2)
+datenbank=(dbname dbname2)
+date1="$(date +%a)"
+date2="$(date +%A %d.%m.%Y)"
+dbuser="DBUSER"
+dbpass="DBPASS"
+email="monitor@example.com"
+mailsubject="Backup - $hostname"
+mailtext="/tmp/mailtext.txt"
 
-backupdir=/data/backup	 			# Verzeichniss wo die Backups abgelegt werden, es werden automatisch unterordner "mysql" und "files" erstellt.
-datenbank=(dbname dbnam2)			# Datenbanken welche gesichert werden sollen
-datadir=(/path/to/webdir1 /path/to/webdir2)	# Welche Ordner sollen gesichert werden
-dbuser=DBUSER					# Datenbank User
-dbpass=DBPASS					# Datenbank Passwort
-date1=$(date +%a)				# Datumsformat welches an die Dateien angehangen wird
-hostname=$(hostname -f)				# Hostname
-mailsubject="MYSQL-Backup - $hostname"		# Mail Betreff
-mailtext=/tmp/mailtext.txt 			# Mailtext zum Versand
-email=EMAIL@ADRESSE	 			# Empfaenger der Status Mails
-date2=$(date +%A" "%d.%m.%Y)			# Datum für E-Mail
+################# FUNCTIONS #####################
 
-################# CONFIG END #################
+log_message() {
+    echo -e "$1" | tee -a "$mailtext"
+}
 
-#Clear mailtext
+send_mail() {
+    (
+        echo "To: $email"
+        echo "Subject: $mailsubject"
+        echo "Content-Type: text/plain"
+        echo
+        cat $mailtext
+    ) | msmtp $email
+}
 
-echo " " > $mailtext;
+check_and_install_package() {
+    local pkg="$1"
+    if ! dpkg -l | grep -q "$pkg"; then
+        log_message "Installing $pkg..."
+        sudo apt-get update && sudo apt-get install -y "$pkg"
+        if [ $? -ne 0 ]; then
+            log_message "Failed to install $pkg. Exiting..."
+            send_mail
+            exit 1
+        fi
+    fi
+}
 
-#Aktuelles Datum
-echo "#############################################################" >> $mailtext
-echo "MYSQL Backup Script from $hostname - "$date2 >> $mailtext
-echo "#############################################################" >> $mailtext
-echo "" >> $mailtext
+create_directory() {
+    local dir="$1"
+    if [ ! -d "$dir" ]; then
+        mkdir -p "$dir"
+        if [ $? -ne 0 ]; then
+            log_message "Error creating directory: $dir"
+            send_mail
+            exit 1
+        fi
+    fi
+}
 
-# Check Backupdir
-if test -d $backupdir
-then
-        echo "";
-else
-        echo -n "Create Backupdirectory ... " >> $mailtext
-        mkdir $backupdir
-	if test -d $backupdir
-	then
-        	echo -n "done" >> $mailtext
-		echo "\n" >> $mailtext
-	else
-		echo -n "Error - Cant create backupdirectory" >> $mailtext
-		exit 1;
-	fi
+backup_files() {
+    for dir in "${datadir[@]}"; do
+        if [ -d "$dir" ]; then
+            local sanitized_dir="${dir%/}"  # Entfernt abschließenden Slash
+            local name="$(basename "$sanitized_dir")"  # Extrahiert den Ordnernamen
+            if [ -z "$name" ]; then
+                log_message "Error: Unable to extract directory name for path $dir."
+                send_mail
+                exit 1
+            fi
+            log_message "Backing up directory $dir to $backupdir/files/${name}_$date1.tar.gz..."
+            tar -Pczf "$backupdir/files/${name}_$date1.tar.gz" "$dir" --ignore-failed-read --warning=no-file-changed
+            if [ $? -ne 0 ]; then
+                log_message "Error backing up $dir. Exiting..."
+                send_mail
+                exit 1
+            fi
+        else
+            log_message "Error: Directory $dir does not exist. Skipping..."
+        fi
+    done
+}
 
-fi
-# Check Backupdir for mysql
-if test -d $backupdir/mysql
-then
-        echo "";
-else
-        echo -n "Create Backupdirectory for mysql ... " >> $mailtext
-        mkdir $backupdir/mysql
-	if test -d $backupdir/mysql
-	then
-        	echo -n "done" >> $mailtext
-		echo "\n" >> $mailtext
-	else
-		echo -n "Error - Cant create backupdirectory for mysql" >> $mailtext
-		exit 1;
-	fi
+backup_mysql() {
+    for db in "${datenbank[@]}"; do
+        local dump_file="$backupdir/mysql/${db}_$date1.sql"
+        log_message "Creating MySQL dump for database $db..."
+        mysqldump -u"$dbuser" -p"$dbpass" --opt "$db" > "$dump_file"
+        if [ $? -ne 0 ]; then
+            log_message "Error creating MySQL dump for $db. Exiting..."
+            send_mail
+            exit 1
+        fi
+        log_message "Compressing dump file $dump_file..."
+        gzip -f -9 "$dump_file"
+        if [ $? -ne 0 ]; then
+            log_message "Error compressing $dump_file. Exiting..."
+            send_mail
+            exit 1
+        fi
+    done
+}
 
-fi
+################# MAIN SCRIPT #####################
 
-# Check Backupdir for files
-if test -d $backupdir/files
-then
-        echo "";
-else
-        echo -n "Create Backupdirectory for files ... " >> $mailtext
-        mkdir $backupdir/files
-	if test -d $backupdir/files
-	then
-        	echo -n "done" >> $mailtext
-		echo "\n" >> $mailtext
-	else
-		echo -n "Error - Cant create backupdirectory for files" >> $mailtext
-		exit 1;
-	fi
+>"$mailtext" # Clear mail text
+log_message "Starting backup script for $hostname on $date2"
 
-fi
+check_and_install_package "msmtp"
 
-######################
-# Start Files backup #
-######################
+create_directory "$backupdir"
+create_directory "$backupdir/mysql"
+create_directory "$backupdir/files"
 
-#count datadir's from config
-countdir=${#datadir[*]};
+backup_files
+backup_mysql
 
-for (( j=0; j<$countdir; j++ ))
-do
-	#reset Error Variable TODO Error handling
-	error="0";
-	filesdir=${datadir[$j]}
-	#echo "";
-	#make backup from files dir
-	name=$(basename $filesdir)
-	echo -n "make backup from $filesdir ..." >> $mailtext
-	tar -Pczf  $backupdir/files/$name'_'$date1.tar.gz $filesdir
-	if [ $? == "0" ]
-	then
-		echo -n " done" >> $mailtext
-		echo "\n" >> $mailtext
-	else
-		echo -n " error" >> $mailtext
-		echo "\n" >> $mailtext
-	fi
-done
-
-
-######################
-# Start MYSQL Backup #
-######################
-
-#clear mysql checkfile
-echo "" > /tmp/mysqlcheck
-
-#count databaeses from config
-count=${#datenbank[*]};
-
-for (( i=0; i<$count; i++ ))
-do
-	#reset Error Variable
-	dumperror="0";
-
-	db=${datenbank[$i]}
-	echo " ";
-	# Check MYSQL DB
-		echo -n "Check Mysql Database: \"$db\" ... " >> $mailtext
-		mysqlcheck -s -u$dbuser -p$dbpass $db >> /tmp/mysqlcheck
-
-		if [ $? == "0" ]
-		then
-			mysqlcheck=$(cat /tmp/mysqlcheck)
-			if [ -n "$mysqlcheck" ];
-			then
-				echo -n " Error -> Details am Ende der Mail" >> $mailtext
-				echo "" >> $mailtext
-			else
-				echo -n " OK" >> $mailtext
-				echo "" >> $mailtext
-			fi
-		else
-			echo -n " Error " >> $mailtext
-			echo "" >> $mailtext
-		fi
-
-	# Dump MYSQL DB
-		echo -n "create dump for db: \"$db\" ... " >> $mailtext
-		mysqldump -u$dbuser -p$dbpass --opt $db > $backupdir/mysql/$db'_'$date1.sql
-		if [ $? == "0" ]
-		then
-			echo -n " done " >> $mailtext
-			sqlfile=$backupdir/mysql/$db'_'$date1.sql
-			echo " " >> $mailtext
-		else
-			echo -n " Error " >> $mailtext
-			dumperror="1";
-			echo " " >> $mailtext
-		fi
-
-	# Gzip MYSQL Dump
-		echo -n "gzip dump for db: \"$db\" ... " >> $mailtext
-		if [ $dumperror == "0" ]
-		then
-	                gzip -f -9 $sqlfile
-	                if [ $? == "0" ]
-	                then
-	                        echo -n " done " >> $mailtext
-	                        echo " " >> $mailtext
-	                else
-	                        echo -n " Error " >> $mailtext
-	                        echo " " >> $mailtext
-	                fi
-		else
-			echo -n " Error " >> $mailtext
-			echo " " >> $mailtext
-		fi
-
-
-
-
-if [ -n "$mysqlcheck" ];
-then
-
-	echo " " >> $mailtext
-	echo "##############################################################" >> $mailtext
-	echo "Mysql Check Details: " >> $mailtext
-	echo "##############################################################" >> $mailtext
-	echo "" >> $mailtext
-	cat /tmp/mysqlcheck >> $mailtext
-fi
-
-done
-
-# Mailversand
-
-cat $mailtext | mail -s "$mailsubject" $email
-
-exit 0;
+log_message "Backup completed successfully."
+send_mail
+exit 0
